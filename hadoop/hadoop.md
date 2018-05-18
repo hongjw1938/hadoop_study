@@ -98,3 +98,213 @@
             - JDK를 다운 받고 설치
             - profile에 환경변수 설정
         * 의사(유사) 분산 모드 운용을 위한 하둡 환경 설정
+            - 하둡 구성 파일이 있는 디렉터리로 이동함.(conf)
+                1. hadoop-env.sh 파일을 편집
+                    >> 위에서 9번째 줄의 주석을 수정
+                        export JAVA_HOME=/usr/java/default
+                        export HADOOP_HOME_WARN_SUPPRESS="TRUE"
+                2. masters, slaves파일 확인 : 의사 분산 모드는 하나의 노드가 namenode, secondary namenode, datanode, jobtracker, tasktracker역할을 다 해야 함. localhost내용만 있으면 된다.
+                    >> cat masters, cat slaves
+                3. HDFS와 MapReduce 공통 설정
+                    >> vi core-site.xml
+                        <configuration>
+                            <property>
+                                <name>fs.default.name</name>
+                                <value>hdfs://localhost:9000</value>
+                            </property>
+                            <property>
+                                <name>hadoop.tmp.dir</name>
+                                <value>/opt/hadoop/hadoop-tmp-dir/</value>
+                            </property>
+                        </configuration>
+                4. HDFS만의 설정
+                    >> vi hdfs-site.xml
+                        <configuration>
+                            <property>
+                                <name>dfs.replication</name>
+                                <value>1</value>
+                            </property>
+                            <property>
+                                <name>dfs.http.address</name>
+                                <value>localhost:50070</value>
+                            </property>
+                            <property>
+                                <name>dfs.secondary.http.address</name>
+                                <value>localhost:50090</value>
+                            </property>
+                            <property>
+                                <name>dfs.name.dir</name>
+                                <value>/opt/hadoop/hadoop-tmp-dir/dfs/name</value>
+                            </property>
+                            <property>
+                                <name>dfs.name.edits.dir</name>
+                                <value>${dfs.name.dir}</value>
+                            </property>
+                            <property>
+                                <name>dfs.data.dir</name>
+                                <value>/opt/hadoop/hadoop-tmp-dir/dfs/data</value>
+                            </property>
+                        </configuration>
+                5. MapReduce만의 설정
+                    >> vi mapred-site.xml
+                        <configuration>
+                            <property>
+                                <name>mapred.job.tracker</name>
+                                <value>localhost:9001</value>
+                            </property>
+                        </configuration>
+                6. 네임노드 포맷. : user명 namenode -format
+                7. 하둡관련 프로세스 실행 : jps
+                8. 맵리듀스 모두 실행 : start-all.sh
+                9. 다시 jps 했을 때, 6가지 나오면 문제 없음
+                10. web browser로 확인 : localhost:50070(가상머신에서 할 때)
+                    stop-all.sh        // HDFS & 맵리듀스 모두 종료
+                    
+                    start-dfs.sh       // HDFS만 실행
+                    jps                // NameNode 및 DataNode는 HDFS의 구성요소
+                    
+                    25399 SecondaryNameNode
+                    25127 NameNode
+                    25468 Jps
+                    25252 DataNode
+                    
+                    stop-dfs.sh        // HDFS만 종료
+                     
+                    start-mapred.sh    // 맵리듀스만 실행
+                    jps                // JobTracker 및 TaskTracker는 맵리듀스의 구성요소
+                    
+                    25881 TaskTracker
+                    25937 Jps
+                    25755 JobTracker
+                    
+                    stop-mapred.sh     // 맵리듀스만 종료
+                    
+                    start-all.sh 
+                11. WordCount 예제
+                    - 하둡 파일 시스템 명령어는 hadoop fs로 시작함
+                        >> 디렉토리 만들기  : hadoop fs -mkdir (상대, 절대 경로 모두 가능)
+                        >> 파일 리스트 : hadoop fs -ls
+                        >> 파일 옮기기 : hadoop fs -put 파일명 디렉토리명
+                        >> 파일 리스트, 하위 리스트까지 : hadoop fs -lsr 경로(경로 없으면 현재)
+                        >> 내용보기 : hadoop fs -cat 파일경로명(tab키 불가)
+                        >> jar파일 실행 : hadoop jar 디렉토리명/파일명.jar 클래스명 실행파일명 '결과를 나타낼 파일명'
+                            --> 워드카운트를 실행하고 나면, _SUCCESS : 성공했음을 알리는 파일, _logs : 진행한 내용을 저장한 파일을 확인 가능
+                            --> part로 시작하는 파일이 있는데 결과물을 보여줌
+                    - 하둡1은 이미 존재하는 파일을 덮어쓰지 못하도록 설계됨. 덮어쓰려는 시도를 하면 에러 발생, 2부터는 가능
+                        >> 따라서, 재시도할 때, output경로 사용 불가. 지우고 재시도하거나 다르게 설정해야함
+                        >> 지우기 : hadoop fs -rmr(recursive) output
+                    * 네트워크
+                        - 원래 web browser에서 주소창에 주소를 치면 ip주소로 변환되어 입력된다.
+                        - 이것을 해주는 곳이 DNS서버인데, 그 전에 컴퓨터의 내부 hosts파일을 먼저 참조한다.
+                        - 해당 호스트 파일은 C:\Windows\System32\drivers\etc에 존재함
+                        - 따라서, 거기 없으면 DNS에서 찾음
+                    * wordcount
+                        - 만약 wordcount시에 jar파일을 실행해 wordcount클래스를 실행시, 실행파일을 여러 파일이 들어있는 폴더로 지정시 각 파일을 모두 받아서 수행함
+                        - ex) hosts파일과 README.txt를 모두 input에 넣어놓고 실행해보기
+                        >> input에 실행파일을 여러 개 넣고 hadoop jar로 실행하면 여러 파일에 대해 mapreduce실행
+                    * 전체 진행 순서(process)
+                        - input > split > mapping > shuffle > reduceing > final result
+>###    5. 하둡 분산 파일 시스템
+        * HDFS : hadoop distributed file system은 수십 테라~ 페타바이트 이상의 대용량 파일을 분산된 서버에 저장하고, 많은 클라이언트가 저장된 데이터를 빠르게 처리할 수 있게 설계된 파일시스템이다.
+            - 기존에도 DAS, NAS, SAN과 같은 대용량 파일시스템은 존재했음. HDFS 또한 이와 유사한 점이 많음
+            - 기존과의 가장 큰 차이점은 HDFS는 저사양 서버를 이용해 스토리지를 구성할 수 있다는 것.
+            - 수십 혹은 수백 대의 웹 서버급 서버를 묶어 하나의 스토리지처럼 사용 가능
+            - 이 때, HDFS에 저장하는 데이터는 물리적으로는 분산 서버의 로컬 디스크에 저장되어 있으나, 파일의 읽기 및 저장과 같은 제어는 HDFS에서 제공하는 API를 이용해 처리됨
+            - 그러나, 기존을 완전히 대체할 수는 없음. DBMS와 같은 고성능과 고가용성이 필요시 SAN을, 안정적 파일 저장 시 NAS사용, 전자상거래처럼 트랜잭션이 중요시 적합하지 않음.
+            - 데이터를 저장하거나(대규모), 배치 처리를 하는 경우에 HDFS를 사용
+        ** HDFS 아키덱쳐
+            * 블록 구조 파일 시스템
+                - HDFS는 블록 구조의 파일 시스템, 저장 파일은 특정 크기의 블록으로 나뉘어 분산 서버에 저장. 크기는 기본적으로 64메가. 변경가능
+                - 64MB인 이유?
+                    1. 디스크 시크 타임 감소(2.0부터는 128)
+                    2. 네임노드 유지하는 메타데이터 크기 감소
+                    3. 클라이언트와 네임노드의 통신 감소
+            * HDFS 클러스터 : hdfs-site.xml파일의 replication을 조정해 얼마나 복제할지 설정 가능(복제본의 수는 기본적으로 3개)
+                - 노드를 여러개 만들어서 각 블록 저장.
+                - 200MB이면 64, 64, 64, 8 로 저장(각 블록에)
+                - 노드가 증가시 소프트웨어 관리 비용이 증가함. 이를 관리하는 것은 하둡이 해주는데 그 중, namenode, datanode가 함
+                - 마스터 서버는 네임노드이며 슬레이브서버는 데이터노드임
+            * 네임노드
+                - 메타데이터 관리 : 파일 시스템 유지 위한 메타데이터 관리. 메타데이터는 파일 시스템 이미지와 파일에 대한 블록 매핑 정보로 구성
+                - 데이터노드 모니터링 : 데이터노드는 네임노드에 3초마다 하트비트 메시지 전송. 네임노드는 이를 통해 데이터노드의 실행상태와 용량 모니터링
+                - 블록 관리 : 장애 발생한 데이터 노드 발견시 해당 데이터 노드의 블록을 새로운 데이터노드로 복제함.
+                - 클라이언트 요청 접수 : 클라이언트가 HDFS에 접근시 반드시 네임노드에 먼저 접속. 
+            * 보조네임노드(SecondaryNameNode, SNN)
+                - 네임노드는 메타데이터를 메모리에서 처리한다. 하지만 메모리에만 데이터 유지시 서버가 재부팅될 경우 데이터를 유실할 가능성이 있음
+                - 이를 극복하기 위해, HDFS는 editslog와 fsimage라는 두 개의 파일을 생성한다.
+                - editslog는 모든 변경 이력을 저장(HDFS)
+                - fsimage에는 메모리에 저장된 메타데이터의 파일 시스템 이미지를 저장한 파일임
+                - 1시간을 기본으로, editslog는 계속 쌓이면 용량이 커지니까 fsimage와 editslog를 합쳐서 새로운 image를 만들고 editslog를 만들어 새로 로그를 저장함
+                - 이와 같이 fsimage를 갱신하는 역할을 주기적으로 하는데 이 작업을 checkpoint라고 한다.(따라서 보조네임노드를 체크포인팅 서버라고 표현)
+                * 로그 롤링 : 보조네임노드는 네임노드에게 editslog를 롤링할 것을 요청(로그 롤링은 현재 로그 파일의 이름 변경 후, 원래 이름으로 새 로그 파일을 만드는 것.)
+                    - 교재 79페이지 참조
+            * 파일저장 방식
+                1. 파일 저장 요청
+                    - 클라이언트가 HDFS에 파일 저장시 파일을 저장을 위한 스트림 생성해야 함.
+                    - 스트림을 요청하면 하둡은 FileSystem이라는 추상 클래스에 일반적 파일시스템을 관리하기 위한 메서드를 정의했기에 클라이언트는 DistributedFS의 create메서드를 호출해 스트림 객체를 생성함
+                    - 그 스트림 객체로, FSDataOutputStream을 생성함. 이는 데이터노드와 네임노드의 통신 관리하는 DFSOutputStream을 래핑하는 클래스임.
+                    - DFSOutputStream을 생성하기 위해 DFSClient의 create메서드 호출함.
+                    - 스트림을 생성하면 네임노드는 요청이 유효한지 검사함. 문제가 있다면 오류 발생, 정상일시 파일 시스템 이미지에 해당 파일의 엔트리를 추가함
+                    - 유효성 통과시 객체가 정상적으로 생성됨, FSDataOutputStream을 클라이언트에 반환
+                2. 패킷 전송
+                    - 클라이언트가 네임노드에게서 파일 제어권을 얻으면 파일 저장이 진행됨
+                    - 각 데이터 노드에 클라이언트는 전송하게 되고 저장할 파일은 패킷 단위로 나누어 전송함
+        * 각종 명령어 : 81~95페이지 참조
+>###    6. 잡 스케쥴러
+        * 하둡 잡 스케쥴
+            - 기본적으로 FIFO임.
+            - 그런데 만약 A, B작업이 있는데 A는 30초, B는 10분이 걸리나고 가정하자. 근데 B가 먼저 들어왔다고 해서 A가 진행되기 위해 10분을 기다려야 한다면 문제가 될 것
+            - 그러므로, 페어 스케쥴러와 커패시티 스케쥴러를 제공함
+            * 페어스케쥴러
+                - 잡을 풀(pool)형태로 관리함
+                - 모든 잡이 하둡 클러스터의 자원을 풀을 이용해 공평하게 사용하겠다는 것을 목표로 함.
+                - 슬롯을 사용해 최소한으로 실행할 수 있는 맵 태스크와 리듀스 태스크의 개수를 관리하고, 슬롯으로 하둡 클러스터의 자원을 미리 할당받는다면 B도 10분 대기할 필요 없이 진행가능
+                - 하둡 1에는 페어 스케쥴러가 소스만 포함되어 있으니 별도로 JAR파일을 빌드해야 함.
+                - cd $HADOOP_HOME/src/contrib/fairscheduler에 있음
+            * 커패스티 스케쥴러
+                - 큐를 이용해 스케쥴 관리
+                - 큐는 맵 태스크와 리듀스 태스크를 실행할 수 있는 슬롯을 가짐
+                - 이런 큐를 여러 개 생성하여 하둡 클러스터의 자원을 공유하게 됨
+                - 스케쥴러는 큐를 지속적으로 모니터링해서 자원을 재분배함
+>###    7. 셔플
+        * 셔플
+            - 메모리에 저장돼 있는 매퍼의 출력 데이터를 파티셔닝 및 정렬하여 로컬 디스크에 저장 후, 네트워크를 통해 리듀서의 입력 데이터로 전달되는 과정을 의미
+            - 기본적으로 파티션이 포함됨. 분류 및 정렬을 해줌.
+            - 파티션에는 기본파티션이 있고, 별도의 파티션을 만들 수도 있다.
+            - 셔플 속성은 mapred-site.xml에서 설정 가능함. 그러나 바람직하지 않고, 잡 드라이버 클래스의 Configuration객체의 setConf메서드로 설정 가능
+        * 콤바이너
+            - 매퍼의 출력 데이터가 네트워크를 통해 리듀서에 전달되기 전에 매퍼의 출력 데이터의 크기를 줄이는 기능 수행
+            - 즉, 매퍼의 출력을 집계하여 리듀서에 보내기 전에 리소스를 줄이는 것. 리듀서는 콤바이너에서 줄어든 데이터를 가지고 다시 집계함
+>###    8. 맵리듀스 기초(항공데이터)
+        * 항공 데이터 : http://stat-computing.org/dataexpo/2009/1987.csv.bz2에서 다운로드
+            - 칼럼정보는 콤마로 구분되며 압축 풀면 첫 째 줄에 칼럼정보가 있고 그 아래에 데이터가 있음
+            - mkdir data로 하나 만들고 거기에 vi download.sh로 파일을 하나 만든다
+            - 아래와 같이 내부에 넣고 chmod 755 download.sh
+                #!/bin/sh
+                
+                for ((i=1987; i <= 2008; i++)) ; do
+                  wget http://stat-computing.org/dataexpo/2009/$i.csv.bz2
+                  bzip2 -d $i.csv.bz2
+                  sed -e '1d' $i.csv > $i_temp.csv
+                  mv $i_temp.csv $i.csv
+                done
+                * 코드
+                    - wget으로 파일을 다운받을 수 있다.
+                    - bzip으로 압축을 푼다
+                    - sed로 컬럼을 1번째는 제거
+                    - 해당 파일을 이동
+                    - 한 번에 다운로드시 매우 느림. 나누어서 할 것.
+            - ./download.sh 로 실행가능. --> 데이터를 받을 것.
+>###    9. 튜닝
+        * JVM 재사용
+            - 태스크트래커는 맵 태스크와 리듀스 태스크를 실행할 때 각각 별도의 JVM을 실행함
+            - 일반적으로 매우 빠르지만, 별도의 초기화 로직이 있거나, 매퍼, 리듀서의 초기화 시간이 오래 걸리면 전체 잡 실행에 영향을 줌
+            - 이를 방지하기 위해 JVM을 재사용하는 옵션을 사용할 수 있음.
+        * 투기적 잡 실행
+            - 하둡은 하나의 잡에서 수행할 전체 태스크를 병렬로 수행함. 그런데, 하둡은 전체 맵 태스크가 완료돼야만 리듀스 태스크가 실행됨, 전체 리듀스 태스크 수행이 완료돼야 잡이 정상적으로 종료됐다고 인식
+            - 하둡은 수행되는 태스크 가운데 일정 시간이 지났음에도 계속 실행하는 태스크가 있으면 해당 태스크가 수행하는 데이터노드와 다른 데이터노드에서 동일한 태스크를 병렬로 실행함
+            - 기존 태스크가 먼저 완료시 병렬 수행하면 태스크를 강제 종료, 병렬로 수행되던 태스크가 먼저 완료시 기존 태스크 강제 종료
+            - 즉, 160개의 작업이 있고 10개의 데이터 노드가 있다면, 각각 대략 16개씩 수행해야 함. 이 경우, 먼저 다 끝낸 데이터 노드가 다른 데이터 노드의 작업을 (현재 진행중인 것) 받아서 수행함. 
+>###    10. 하둡 운영
+        * 어드민 명령어
+            - hadoop dfsadmin -report : 기본적인 정보 및 상태 출력
